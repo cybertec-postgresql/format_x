@@ -6,7 +6,7 @@
 #include "catalog/pg_type.h" /* Oid constants */
 #include "utils/jsonb.h"
 #include "utils/lsyscache.h" /* getTypeOutputInfo(), type_is_rowtype() */
-#include "utils/typcache.h" /* lookup_rowtype_tupdesc() */
+#include "utils/typcache.h"  /* lookup_rowtype_tupdesc() */
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
