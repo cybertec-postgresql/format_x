@@ -2,7 +2,6 @@
 #include "fmgr.h"
 #include "utils/builtins.h"
 #include "lib/stringinfo.h"
-#include "hstore.h"
 #include "access/htup_details.h" /* HeapTupleHeader, HeapTupleHeaderGet*(), heap_getattr() */
 #include "catalog/pg_type.h" /* Oid constants */
 #include "utils/jsonb.h"
@@ -16,8 +15,6 @@ PG_MODULE_MAGIC;
 Datum format_x(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(format_x);
 
-typedef HStore *(*hstoreUpgradeF)(Datum);
-typedef int (*hstoreFindKeyF)(HStore *, int *, char *, int);
 
 /* This struct holds data about each format specifier in the format string */ 
 /* After processing and appending the result to the output buffer, it is overwritten by the next format specifier's data
@@ -45,12 +42,6 @@ typedef struct {
   Datum *elements;
   bool *nulls;
   Oid element_type;
-
-  // HStore info
-  void *filehandle;
-  hstoreFindKeyF hstoreFindKey;
-  hstoreUpgradeF hstoreUpgrade;
-  Oid hstoreOid;
 } FormatargInfoData;
 
 /* This struct holds, eventually, the value to be written in place of a given format specifier in the output string. */
@@ -76,7 +67,6 @@ void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key, in
 void record_lookup(Object *object, char *key, int keylen);
 void jsonb_lookup(Object *object, char *key, int keylen);
 void json_lookup(Object *object, char *key, int keylen);
-void hstore_lookup(Object *object, FormatargInfoData *arginfodata, char *key, int keylen);
 
 /* Parse the optional portions of the format specifier */
 char *option_format(StringInfoData *output, char *string, int length, int width, bool align_to_left);
@@ -86,9 +76,6 @@ void make_argument_data(FormatargInfoData *arginfodata, FunctionCallInfo fcinfo)
 
 /* Consume an FormatargInfoData and a position and return the datum at that position */
 Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid, bool *isNull);
-
-/* Check if typid belongs to hstore as hstore's oid is not constant */
-bool is_hstore(Oid typid, FormatargInfoData *arginfodata);
 
 /* findJsonbValueFromContainerLen() is static and must be copied here */
 /* findJsonbValueFromContainerLen() is a findJsonbValueFromContainer() wrapper that sets up JsonbValue key string. */
@@ -121,11 +108,6 @@ Datum format_x(PG_FUNCTION_ARGS) {
     PG_RETURN_NULL();
 
   make_argument_data(&arginfodata, fcinfo);
-
-  arginfodata.filehandle = NULL;
-  arginfodata.hstoreFindKey = NULL;
-  arginfodata.hstoreUpgrade = NULL;
-  arginfodata.hstoreOid = InvalidOid;
 
   format_string_text = PG_GETARG_TEXT_PP(0);
   startp = VARDATA_ANY(format_string_text);
@@ -409,10 +391,6 @@ void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key, in
     jsonb_lookup(object, key, keylen);
   }
 
-  else if (is_hstore(object->typid, arginfodata)) {
-    hstore_lookup(object, arginfodata, key, keylen);
-  }
-
   else {
     elog(ERROR, "Invalid argument type for key \"%s\"", key);
   }
@@ -459,55 +437,6 @@ void jsonb_lookup(Object *object, char *key, int keylen) {
   }
 }
 
-bool is_hstore(Oid typid, FormatargInfoData *arginfodata) {
-  /* If HStore has been previously detected, skip lookup for oid */
-  if (arginfodata->hstoreOid != InvalidOid) {
-    return arginfodata->hstoreOid == typid;
-  }
-
-  bool typIsVarlena;
-  Oid typoutputfunc;
-  FmgrInfo typoutputfinfo;
-  PGFunction hstore_out;
-
-  getTypeOutputInfo(typid, &typoutputfunc, &typIsVarlena);
-  fmgr_info(typoutputfunc, &typoutputfinfo);
-
-  hstore_out = load_external_function("hstore", "hstore_out", false, &arginfodata->filehandle);
-
-  if (typoutputfinfo.fn_addr == hstore_out) {
-    arginfodata->hstoreOid = typid;
-    return true;
-  }
-  
-  return false;
-}
-
-void hstore_lookup(Object *object, FormatargInfoData *arginfodata, char *key, int keylen) {
-  if (arginfodata->hstoreUpgrade == NULL) {
-    arginfodata->hstoreUpgrade = (hstoreUpgradeF) lookup_external_function(arginfodata->filehandle, "hstoreUpgrade");
-  }
-  HStore *hs = arginfodata->hstoreUpgrade(object->item);
-
-  if (arginfodata->hstoreFindKey == NULL) {
-    int (*hstoreFindKey) (HStore*, int*, char*, int) = (int (*)(HStore*, int*, char*, int)) lookup_external_function(arginfodata->filehandle, "hstoreFindKey");
-    arginfodata->hstoreFindKey = hstoreFindKey;
-  }
-  int idx = arginfodata->hstoreFindKey(hs, NULL, key, keylen);
-
-  /* If key is not found, generate error */
-  if (idx < 0) {
-    ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("key \"%*s\" does not exist", keylen, key)));
-  }
-
-  if (HSTORE_VALISNULL(ARRPTR(hs), idx)) {
-    object->isNull = true;
-  }
-
-  object->item = (Datum) cstring_to_text_with_len(HSTORE_VAL(ARRPTR(hs), STRPTR(hs), idx), HSTORE_VALLEN(ARRPTR(hs), idx));
-  object->typid = TEXTOID;
-}
 
 char *option_format(StringInfoData *output, char *string, int length, int width, bool align_to_left) {
   if (width == 0) {
