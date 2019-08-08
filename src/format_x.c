@@ -15,14 +15,14 @@ PG_MODULE_MAGIC;
 Datum format_x(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(format_x);
 
-
-/* This struct holds data about each format specifier in the format string */ 
-/* After processing and appending the result to the output buffer, it is overwritten by the next format specifier's data
- * Note that the format string data is stored elsewhere */
+/* This struct holds data about each format specifier in the format string */
+/* After processing and appending the result to the output buffer, it is
+ * overwritten by the next format specifier's data Note that the format string
+ * data is stored elsewhere */
 typedef struct {
   int parameter; // a 0 indicates no parameter
-  char *key; // NULL indicates no key
-  int keylen; // a 0 keylen indicates no key
+  char *key;     // NULL indicates no key
+  int keylen;    // a 0 keylen indicates no key
   bool flag;
   int width;
   int precision;
@@ -44,7 +44,8 @@ typedef struct {
   Oid element_type;
 } FormatargInfoData;
 
-/* This struct holds, eventually, the value to be written in place of a given format specifier in the output string. */
+/* This struct holds, eventually, the value to be written in place of a given
+ * format specifier in the output string. */
 /* It is created initially from the argument corresponding to that specifier. */
 typedef struct {
   Datum item;
@@ -56,50 +57,59 @@ typedef struct {
 static bool format_read_digits(char **cpp, char *endp, int *number);
 
 /* Read a format specifier (generally following the SUS printf specification) */
-static char *format_read_specifier(char *cp, char *endp, FormatSpecifierData *spec);
+static char *format_read_specifier(char *cp, char *endp,
+                                   FormatSpecifierData *spec);
 
 /* Returns a formatted string when provided with named arguments */
-void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, FormatargInfoData *arginfodata);
+void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output,
+                   FormatargInfoData *arginfodata);
 
 /* Lookup an attribute by key (with length keylen) in object */
 /* The result and result type is returned by rewriting members of object */
-void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key, int keylen);
+void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key,
+                   int keylen);
 void record_lookup(Object *object, char *key, int keylen);
 void jsonb_lookup(Object *object, char *key, int keylen);
 void json_lookup(Object *object, char *key, int keylen);
 
 /* Parse the optional portions of the format specifier */
-char *option_format(StringInfoData *output, char *string, int length, int width, bool align_to_left);
+char *option_format(StringInfoData *output, char *string, int length, int width,
+                    bool align_to_left);
 
-/* Populate FormatargInfoData from FunctionCallInfo; copied from text_format() */
-void make_argument_data(FormatargInfoData *arginfodata, FunctionCallInfo fcinfo);
+/* Populate FormatargInfoData from FunctionCallInfo; copied from text_format()
+ */
+void make_argument_data(FormatargInfoData *arginfodata,
+                        FunctionCallInfo fcinfo);
 
-/* Consume an FormatargInfoData and a position and return the datum at that position */
-Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid, bool *isNull);
+/* Consume an FormatargInfoData and a position and return the datum at that
+ * position */
+Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid,
+             bool *isNull);
 
 /* findJsonbValueFromContainerLen() is static and must be copied here */
-/* findJsonbValueFromContainerLen() is a findJsonbValueFromContainer() wrapper that sets up JsonbValue key string. */
+/* findJsonbValueFromContainerLen() is a findJsonbValueFromContainer() wrapper
+ * that sets up JsonbValue key string. */
 static JsonbValue *findJsonbValueFromContainerLen(JsonbContainer *container,
-                                                           uint32 flags,
-                                                           char *key,
-                                                           uint32 keylen);
+                                                  uint32 flags, char *key,
+                                                  uint32 keylen);
 
 /* For typid; GetAttributeByName() does not provide typid */
-Datum GetAttributeAndTypeByName(HeapTupleHeader tuple, const char *attname, Oid *atttypid, bool *isNull);
+Datum GetAttributeAndTypeByName(HeapTupleHeader tuple, const char *attname,
+                                Oid *atttypid, bool *isNull);
 
-#define ADVANCE_READ_POINTER(cp, endp) do { \
-  if (++(cp) >= (endp)) \
-    ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), \
-		    errmsg("unterminated format_x() type specifier"), \
-		    errhint("For a single \"%%\" use \"%%%%\"."))); \
-} while (0)
+#define ADVANCE_READ_POINTER(cp, endp)                                         \
+  do {                                                                         \
+    if (++(cp) >= (endp))                                                      \
+      ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),                \
+                      errmsg("unterminated format_x() type specifier"),        \
+                      errhint("For a single \"%%\" use \"%%%%\".")));          \
+  } while (0)
 
 Datum format_x(PG_FUNCTION_ARGS) {
   text *format_string_text;
   char *cp, *startp, *endp;
   int last_parameter = 0;
-  FormatargInfoData arginfodata = {
-    .fcinfo = fcinfo };
+  FormatargInfoData arginfodata = {.fcinfo = fcinfo};
   FormatSpecifierData spec;
   StringInfoData output;
 
@@ -140,7 +150,8 @@ Datum format_x(PG_FUNCTION_ARGS) {
           last_parameter++;
         spec.parameter = last_parameter;
       }
-    } else last_parameter = spec.parameter;
+    } else
+      last_parameter = spec.parameter;
 
     format_engine(&spec, &output, &arginfodata);
   }
@@ -197,18 +208,18 @@ static bool format_read_digits(char **cpp, char *endp, int *number) {
  * Note parsing invariant: at least one character is known to be available
  * before string end (endp) at entry, and this is still true at exit.
  */
-static char *
-format_read_specifier(char *cp, char *endp, FormatSpecifierData *spec) {
+static char *format_read_specifier(char *cp, char *endp,
+                                   FormatSpecifierData *spec) {
   int number;
 
   /* Set defaults for output specifier data */
-  *spec = (FormatSpecifierData) {
-    .parameter = 0,
-    .key = NULL,
-    .keylen = 0,
-    .flag = 0,
-    .width = 0,
-    .precision = 0,
+  *spec = (FormatSpecifierData){
+      .parameter = 0,
+      .key = NULL,
+      .keylen = 0,
+      .flag = 0,
+      .width = 0,
+      .precision = 0,
   };
 
   if (format_read_digits(&cp, endp, &number)) {
@@ -225,7 +236,8 @@ format_read_specifier(char *cp, char *endp, FormatSpecifierData *spec) {
     /* Explicit 0 for argument index is immediately refused */
     if (number == 0)
       ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                      errmsg("format specifies argument 0, but arguments are numbered from 1")));
+                      errmsg("format specifies argument 0, but arguments are "
+                             "numbered from 1")));
   }
 
   /* There are only two possibilities at this point: either we just read a
@@ -277,16 +289,17 @@ format_read_precision:
 
   /* Handle type (either 's', 'I', or 'L') */
   if (strchr("sIL", *cp) == NULL)
-    ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("unrecognized format_x() type specifier \"%c\"",
-                            *cp),
-                    errhint("For a single \"%%\" use \"%%%%\".")));
+    ereport(ERROR,
+            (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+             errmsg("unrecognized format_x() type specifier \"%c\"", *cp),
+             errhint("For a single \"%%\" use \"%%%%\".")));
   spec->type = *cp;
 
   return cp;
 }
 
-void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, FormatargInfoData *arginfodata) {
+void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output,
+                   FormatargInfoData *arginfodata) {
   Object object;
   Oid prev_typid = InvalidOid;
   FmgrInfo typoutputfinfo;
@@ -294,7 +307,8 @@ void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, F
   int vallen;
 
   object.isNull = false;
-  object.item = getarg(arginfodata, specifierdata->parameter, &object.typid, &object.isNull);
+  object.item = getarg(arginfodata, specifierdata->parameter, &object.typid,
+                       &object.isNull);
 
   /* Handle lookup if there is a key */
   if (specifierdata->key != NULL || specifierdata->keylen != 0) {
@@ -309,8 +323,7 @@ void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, F
         format_lookup(&object, arginfodata, keycpy, numchars);
         keycpy = keycpy + numchars + 1;
         numchars = 0;
-      }
-      else {
+      } else {
         numchars++;
       }
     }
@@ -318,20 +331,22 @@ void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, F
 
   if (object.isNull) {
     if (specifierdata->type == 'I') {
-      ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("null values cannot be formatted as an SQL identifier")));
-    }
-    else if (specifierdata->type == 'L') {
+      ereport(ERROR,
+              (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+               errmsg("null values cannot be formatted as an SQL identifier")));
+    } else if (specifierdata->type == 'L') {
       val = "NULL";
       specifierdata->type = 's';
-    }
-    else if (specifierdata->type == 's') {
+    } else if (specifierdata->type == 's') {
       val = "";
     }
-  }
-  else {
-    /* For floats, trim if precision (precision is only formatting done before conversion to string) */
-    if (specifierdata->precision != 0 && (object.typid == FLOAT4OID || object.typid == FLOAT8OID)) {
-      object.item = DirectFunctionCall2(numeric_round, object.item, specifierdata->precision);
+  } else {
+    /* For floats, trim if precision (precision is only formatting done before
+     * conversion to string) */
+    if (specifierdata->precision != 0 &&
+        (object.typid == FLOAT4OID || object.typid == FLOAT8OID)) {
+      object.item = DirectFunctionCall2(numeric_round, object.item,
+                                        specifierdata->precision);
     }
 
     /* Get the appropriate typOutput function */
@@ -349,38 +364,43 @@ void format_engine(FormatSpecifierData *specifierdata, StringInfoData *output, F
 
   vallen = strlen(val);
 
-  /* Once val and vallen have been retrieved and converted, move on to other format specifiers */
+  /* Once val and vallen have been retrieved and converted, move on to other
+   * format specifiers */
 
   /* Need to allocate memory for a new, null-terminated string */
-  /* The return value from hstore_lookup() and jsonb getter are not necessarily null-terminated */
+  /* The return value from hstore_lookup() and jsonb getter are not necessarily
+   * null-terminated */
   char *string = palloc(vallen * sizeof(char) + 1);
   memcpy(string, val, vallen);
   string[vallen] = '\0';
   int length = vallen;
 
   if (specifierdata->type == 'I') {
-    /* quote_identifier() sometimes returns a palloc'd string and sometimes returns the original string */
-    string = (char *) quote_identifier(string);
+    /* quote_identifier() sometimes returns a palloc'd string and sometimes
+     * returns the original string */
+    string = (char *)quote_identifier(string);
     length = strlen(string);
-  }
-  else if (specifierdata->type == 'L') {
-    string = (char *) quote_literal_cstr(string);
+  } else if (specifierdata->type == 'L') {
+    string = (char *)quote_literal_cstr(string);
     length = strlen(string);
   }
 
-  string = option_format(output, string, length, specifierdata->width, specifierdata->flag);
+  string = option_format(output, string, length, specifierdata->width,
+                         specifierdata->flag);
   if (specifierdata->type == 'L') {
     pfree(string);
   }
 }
 
-void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key, int keylen) {
+void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key,
+                   int keylen) {
   if (key == NULL || keylen == 0)
     return;
 
   if (object->isNull) {
     ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-                    errmsg("null arguments cannot be looked up in, so cannot be passed for named parameters")));
+                    errmsg("null arguments cannot be looked up in, so cannot "
+                           "be passed for named parameters")));
   }
 
   if (type_is_rowtype(object->typid)) {
@@ -398,7 +418,8 @@ void format_lookup(Object *object, FormatargInfoData *arginfodata, char *key, in
 
 void record_lookup(Object *object, char *key, int keylen) {
   HeapTupleHeader record = DatumGetHeapTupleHeader(object->item);
-  object->item = GetAttributeAndTypeByName(record, key, &object->typid, &object->isNull);
+  object->item =
+      GetAttributeAndTypeByName(record, key, &object->typid, &object->isNull);
 }
 
 void jsonb_lookup(Object *object, char *key, int keylen) {
@@ -412,33 +433,34 @@ void jsonb_lookup(Object *object, char *key, int keylen) {
   }
 
   switch (v->type) {
-    case jbvNull:
-      object->isNull = true;
-      break;
-    case jbvString:
-      object->item = (Datum) cstring_to_text_with_len(v->val.string.val, v->val.string.len);
-      object->typid = TEXTOID;
-      break;
-    case jbvNumeric:
-      object->item = (Datum) v->val.numeric;
-      object->typid = NUMERICOID;
-      break;
-    case jbvBool:
-      object->item = (Datum) v->val.boolean;
-      object->typid = BOOLOID;
-      break;
-    case jbvArray:
-    case jbvObject:
-    case jbvBinary:
-      object->item = (Datum) JsonbValueToJsonb(v);
-      break;
-    default:
-      elog(ERROR, "unrecognized jsonb type: %d", (int) v->type);
+  case jbvNull:
+    object->isNull = true;
+    break;
+  case jbvString:
+    object->item =
+        (Datum)cstring_to_text_with_len(v->val.string.val, v->val.string.len);
+    object->typid = TEXTOID;
+    break;
+  case jbvNumeric:
+    object->item = (Datum)v->val.numeric;
+    object->typid = NUMERICOID;
+    break;
+  case jbvBool:
+    object->item = (Datum)v->val.boolean;
+    object->typid = BOOLOID;
+    break;
+  case jbvArray:
+  case jbvObject:
+  case jbvBinary:
+    object->item = (Datum)JsonbValueToJsonb(v);
+    break;
+  default:
+    elog(ERROR, "unrecognized jsonb type: %d", (int)v->type);
   }
 }
 
-
-char *option_format(StringInfoData *output, char *string, int length, int width, bool align_to_left) {
+char *option_format(StringInfoData *output, char *string, int length, int width,
+                    bool align_to_left) {
   if (width == 0) {
     appendBinaryStringInfo(output, string, length);
     return string;
@@ -450,8 +472,7 @@ char *option_format(StringInfoData *output, char *string, int length, int width,
     if (length < width) {
       appendStringInfoSpaces(output, width - length);
     }
-  }
-  else {
+  } else {
     // right justify
     if (length < width) {
       appendStringInfoSpaces(output, width - length);
@@ -461,14 +482,14 @@ char *option_format(StringInfoData *output, char *string, int length, int width,
   return string;
 }
 
-Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid, bool *isNull) {
+Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid,
+             bool *isNull) {
   FunctionCallInfo fcinfo = arginfodata->fcinfo;
   Datum arg;
 
   if (parameter >= arginfodata->nargs) {
-    ereport(ERROR,
-                  (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                   errmsg("too few arguments for format_x()")));
+    ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("too few arguments for format_x()")));
   }
 
   /* Get the value and type of the selected argument  */
@@ -476,8 +497,7 @@ Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid, bool *is
     arg = PG_GETARG_DATUM(parameter);
     *isNull = PG_ARGISNULL(parameter);
     *typid = get_fn_expr_argtype(arginfodata->fcinfo->flinfo, parameter);
-  }
-  else {
+  } else {
     arg = arginfodata->elements[parameter - 1];
     *isNull = arginfodata->nulls[parameter - 1];
     *typid = arginfodata->element_type;
@@ -490,140 +510,129 @@ Datum getarg(FormatargInfoData *arginfodata, int parameter, Oid *typid, bool *is
   return arg;
 }
 
-static JsonbValue *
-findJsonbValueFromContainerLen(JsonbContainer *container, uint32 flags,
-                                                           char *key, uint32 keylen)
-{
-        JsonbValue      k;
+static JsonbValue *findJsonbValueFromContainerLen(JsonbContainer *container,
+                                                  uint32 flags, char *key,
+                                                  uint32 keylen) {
+  JsonbValue k;
 
-        k.type = jbvString;
-        k.val.string.val = key;
-        k.val.string.len = keylen;
+  k.type = jbvString;
+  k.val.string.val = key;
+  k.val.string.len = keylen;
 
-        return findJsonbValueFromContainer(container, flags, &k);
+  return findJsonbValueFromContainer(container, flags, &k);
 }
 
-Datum
-GetAttributeAndTypeByName(HeapTupleHeader tuple, const char *attname, Oid *atttypid, bool *isNull)
-{
-        AttrNumber      attrno;
-        Datum           result;
-        Oid                     tupType;
-        int32           tupTypmod;
-        TupleDesc       tupDesc;
-        HeapTupleData tmptup;
-        int                     i;
+Datum GetAttributeAndTypeByName(HeapTupleHeader tuple, const char *attname,
+                                Oid *atttypid, bool *isNull) {
+  AttrNumber attrno;
+  Datum result;
+  Oid tupType;
+  int32 tupTypmod;
+  TupleDesc tupDesc;
+  HeapTupleData tmptup;
+  int i;
 
-        if (attname == NULL)
-                elog(ERROR, "invalid attribute name");
+  if (attname == NULL)
+    elog(ERROR, "invalid attribute name");
 
-        if (isNull == NULL)
-                elog(ERROR, "a NULL isNull pointer was passed");
+  if (isNull == NULL)
+    elog(ERROR, "a NULL isNull pointer was passed");
 
-        if (tuple == NULL)
-        {
-                /* Kinda bogus but compatible with old behavior... */
-                *isNull = true;
-                return (Datum) 0;
-        }
+  if (tuple == NULL) {
+    /* Kinda bogus but compatible with old behavior... */
+    *isNull = true;
+    return (Datum)0;
+  }
 
-        tupType = HeapTupleHeaderGetTypeId(tuple);
-        tupTypmod = HeapTupleHeaderGetTypMod(tuple);
-        tupDesc = lookup_rowtype_tupdesc(tupType, tupTypmod);
+  tupType = HeapTupleHeaderGetTypeId(tuple);
+  tupTypmod = HeapTupleHeaderGetTypMod(tuple);
+  tupDesc = lookup_rowtype_tupdesc(tupType, tupTypmod);
 
-        attrno = InvalidAttrNumber;
-        for (i = 0; i < tupDesc->natts; i++)
-        {
-                if (namestrcmp(&(tupDesc->attrs[i].attname), attname) == 0)
-                {
-                        attrno = tupDesc->attrs[i].attnum;
-                        *atttypid = tupDesc->attrs[i].atttypid;
-                        break;
-                }
-        }
+  attrno = InvalidAttrNumber;
+  for (i = 0; i < tupDesc->natts; i++) {
+    if (namestrcmp(&(tupDesc->attrs[i].attname), attname) == 0) {
+      attrno = tupDesc->attrs[i].attnum;
+      *atttypid = tupDesc->attrs[i].atttypid;
+      break;
+    }
+  }
 
-        if (attrno == InvalidAttrNumber)
-                elog(ERROR, "attribute \"%s\" does not exist", attname);
+  if (attrno == InvalidAttrNumber)
+    elog(ERROR, "attribute \"%s\" does not exist", attname);
 
-        /*
-         * heap_getattr needs a HeapTuple not a bare HeapTupleHeader.  We set all
-         * the fields in the struct just in case user tries to inspect system
-         * columns.
-         */
-        tmptup.t_len = HeapTupleHeaderGetDatumLength(tuple);
-        ItemPointerSetInvalid(&(tmptup.t_self));
-        tmptup.t_tableOid = InvalidOid;
-        tmptup.t_data = tuple;
+  /*
+   * heap_getattr needs a HeapTuple not a bare HeapTupleHeader.  We set all
+   * the fields in the struct just in case user tries to inspect system
+   * columns.
+   */
+  tmptup.t_len = HeapTupleHeaderGetDatumLength(tuple);
+  ItemPointerSetInvalid(&(tmptup.t_self));
+  tmptup.t_tableOid = InvalidOid;
+  tmptup.t_data = tuple;
 
-        result = heap_getattr(&tmptup,
-                                                  attrno,
-                                                  tupDesc,
-                                                  isNull);
+  result = heap_getattr(&tmptup, attrno, tupDesc, isNull);
 
-        ReleaseTupleDesc(tupDesc);
+  ReleaseTupleDesc(tupDesc);
 
-        return result;
+  return result;
 }
 
-void make_argument_data(FormatargInfoData *arginfodata, FunctionCallInfo fcinfo) {
-	bool		funcvariadic;
-	int			nargs;
-	Datum	   *elements = NULL;
-	bool	   *nulls = NULL;
-	Oid			element_type = InvalidOid;
+void make_argument_data(FormatargInfoData *arginfodata,
+                        FunctionCallInfo fcinfo) {
+  bool funcvariadic;
+  int nargs;
+  Datum *elements = NULL;
+  bool *nulls = NULL;
+  Oid element_type = InvalidOid;
 
-	/* If argument is marked VARIADIC, expand array into elements */
-	if (get_fn_expr_variadic(fcinfo->flinfo))
-	{
-		ArrayType  *arr;
-		int16		elmlen;
-		bool		elmbyval;
-		char		elmalign;
-		int			nitems;
+  /* If argument is marked VARIADIC, expand array into elements */
+  if (get_fn_expr_variadic(fcinfo->flinfo)) {
+    ArrayType *arr;
+    int16 elmlen;
+    bool elmbyval;
+    char elmalign;
+    int nitems;
 
-		/* Should have just the one argument */
-		Assert(PG_NARGS() == 2);
+    /* Should have just the one argument */
+    Assert(PG_NARGS() == 2);
 
-		/* If argument is NULL, we treat it as zero-length array */
-		if (PG_ARGISNULL(1))
-			nitems = 0;
-		else
-		{
-			/*
-			 * Non-null argument had better be an array.  We assume that any
-			 * call context that could let get_fn_expr_variadic return true
-			 * will have checked that a VARIADIC-labeled parameter actually is
-			 * an array.  So it should be okay to just Assert that it's an
-			 * array rather than doing a full-fledged error check.
-			 */
-			Assert(OidIsValid(get_base_element_type(get_fn_expr_argtype(fcinfo->flinfo, 1))));
+    /* If argument is NULL, we treat it as zero-length array */
+    if (PG_ARGISNULL(1))
+      nitems = 0;
+    else {
+      /*
+       * Non-null argument had better be an array.  We assume that any
+       * call context that could let get_fn_expr_variadic return true
+       * will have checked that a VARIADIC-labeled parameter actually is
+       * an array.  So it should be okay to just Assert that it's an
+       * array rather than doing a full-fledged error check.
+       */
+      Assert(OidIsValid(
+          get_base_element_type(get_fn_expr_argtype(fcinfo->flinfo, 1))));
 
-			/* OK, safe to fetch the array value */
-			arr = PG_GETARG_ARRAYTYPE_P(1);
+      /* OK, safe to fetch the array value */
+      arr = PG_GETARG_ARRAYTYPE_P(1);
 
-			/* Get info about array element type */
-			element_type = ARR_ELEMTYPE(arr);
-			get_typlenbyvalalign(element_type,
-								 &elmlen, &elmbyval, &elmalign);
+      /* Get info about array element type */
+      element_type = ARR_ELEMTYPE(arr);
+      get_typlenbyvalalign(element_type, &elmlen, &elmbyval, &elmalign);
 
-			/* Extract all array elements */
-			deconstruct_array(arr, element_type, elmlen, elmbyval, elmalign,
-							  &elements, &nulls, &nitems);
-		}
+      /* Extract all array elements */
+      deconstruct_array(arr, element_type, elmlen, elmbyval, elmalign,
+                        &elements, &nulls, &nitems);
+    }
 
-		nargs = nitems + 1;
-		funcvariadic = true;
-	}
-	else
-	{
-		/* Non-variadic case, we'll process the arguments individually */
-		nargs = PG_NARGS();
-		funcvariadic = false;
-	}
+    nargs = nitems + 1;
+    funcvariadic = true;
+  } else {
+    /* Non-variadic case, we'll process the arguments individually */
+    nargs = PG_NARGS();
+    funcvariadic = false;
+  }
 
-        arginfodata->funcvariadic = funcvariadic;
-        arginfodata->nargs = nargs;
-        arginfodata->elements = elements;
-        arginfodata->nulls = nulls;
-        arginfodata->element_type = element_type;
+  arginfodata->funcvariadic = funcvariadic;
+  arginfodata->nargs = nargs;
+  arginfodata->elements = elements;
+  arginfodata->nulls = nulls;
+  arginfodata->element_type = element_type;
 }
