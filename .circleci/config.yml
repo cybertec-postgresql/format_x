@@ -1,0 +1,35 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/buildpack-deps:buster
+
+    steps:
+      - run:
+          name: Install build dependencies
+          command: |
+            echo "deb http://apt.postgresql.org/pub/repos/apt/ buster-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+            sudo apt-get update -y
+            sudo apt-get install -y postgresql-server-dev-11 clang-format
+      - checkout
+      - run:
+          name: Lint
+          command: |
+            SOURCE_FILES=`find ./src/ -name \*.c -type f`
+            for SOURCE_FILE in $SOURCE_FILES
+            do
+              export FORMATTING_ISSUE_COUNT=`clang-format -output-replacements-xml $SOURCE_FILE | grep offset | wc -l`
+              if [ "$FORMATTING_ISSUE_COUNT" -gt "0" ]; then
+                echo "Source file $SOURCE_FILE contains formatting issues. Please use clang-format tool to resolve found issues."
+                exit 1
+              fi
+            done
+      - run:
+          name: Build
+          command: |
+            make
+            mkdir -p build
+            cp src/*.so src/*.o src/*.bc build
+      - store_artifacts:
+          path: build
