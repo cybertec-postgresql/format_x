@@ -402,7 +402,7 @@ void record_lookup(Object *object, char *key, int keylen) {
 }
 
 void jsonb_lookup(Object *object, char *key, int keylen) {
-  Jsonb *jb = DatumGetJsonb(object->item);
+  Jsonb *jb = DatumGetJsonbP(object->item);
   JsonbValue *v;
 
   v = findJsonbValueFromContainerLen(&jb->root, JB_FOBJECT, key, keylen);
@@ -534,10 +534,10 @@ GetAttributeAndTypeByName(HeapTupleHeader tuple, const char *attname, Oid *attty
         attrno = InvalidAttrNumber;
         for (i = 0; i < tupDesc->natts; i++)
         {
-                if (namestrcmp(&(tupDesc->attrs[i]->attname), attname) == 0)
+                if (namestrcmp(&(tupDesc->attrs[i].attname), attname) == 0)
                 {
-                        attrno = tupDesc->attrs[i]->attnum;
-                        *atttypid = tupDesc->attrs[i]->atttypid;
+                        attrno = tupDesc->attrs[i].attnum;
+                        *atttypid = tupDesc->attrs[i].atttypid;
                         break;
                 }
         }
